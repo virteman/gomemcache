@@ -26,10 +26,14 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 // Similar to:
@@ -270,15 +274,37 @@ func (c *Client) dial(addr net.Addr) (net.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.netTimeout())
 	defer cancel()
 
+	var (
+		nc  net.Conn
+		err error
+	)
 	dialerContext := c.DialContext
 	if dialerContext == nil {
 		dialer := net.Dialer{
 			Timeout: c.netTimeout(),
 		}
 		dialerContext = dialer.DialContext
+		//"socks5://cccd_user:pi31415e@memcached:11211?target=127.0.0.1:11210"
+		if s5proxy := os.Getenv("S5PROXY_SRV"); len(s5proxy) > 0 {
+			if tUrl, err := url.Parse(s5proxy); err == nil {
+				if pdialer, err := proxy.FromURL(tUrl, &dialer); err == nil {
+					target := addr.String()
+					tcpaddr, err := net.ResolveTCPAddr(addr.Network(), tUrl.Host)
+					if err != nil {
+						return nil, err
+					}
+					if tcpaddr.String() == target {
+						tParam := tUrl.Query()
+						target = tParam.Get("target")
+					}
+					nc, err = pdialer.(proxy.ContextDialer).DialContext(ctx, addr.Network(), target)
+				}
+			}
+		}
 	}
-
-	nc, err := dialerContext(ctx, addr.Network(), addr.String())
+	if nc == nil {
+		nc, err = dialerContext(ctx, addr.Network(), addr.String())
+	}
 	if err == nil {
 		return nc, nil
 	}

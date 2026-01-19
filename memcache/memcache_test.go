@@ -502,3 +502,8 @@ func TestScanGetResponseLine(t *testing.T) {
 		})
 	}
 }
+func TestConnetByS5(t *testing.T) {
+	localhostTCPAddr := "testmemcached:11211"
+	//os.Setenv("S5PROXY_SRV", "socks5://cccd_user:pi31415e@testmemcached:11211?target=127.0.0.1:11210")
+	testWithClient(t, New(localhostTCPAddr))
+}
